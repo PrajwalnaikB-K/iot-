@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fridge Door Monitor</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0f1e;
+    --bg2: #111827;
+    --bg3: #1a2235;
+    --card: #141d2e;
+    --border: rgba(99,179,237,0.12);
+    --border2: rgba(99,179,237,0.25);
+    --accent: #38bdf8;
+    --accent2: #0ea5e9;
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --font: 'Space Grotesk', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── animated bg ── */
+  .bg-grid {
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(56,189,248,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    animation: gridDrift 20s linear infinite;
+  }
+  @keyframes gridDrift { to { background-position: 40px 40px; } }
+
+  .bg-glow {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 60% 40% at 50% 0%, rgba(56,189,248,0.07), transparent 70%);
+  }
+
+  /* ── layout ── */
+  .app { position: relative; z-index: 1; max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── header ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2.5rem; padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent2), #6366f1);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .logo h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
+  .logo p { font-size: 12px; color: var(--text3); font-family: var(--mono); }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25);
+    border-radius: 20px; padding: 5px 12px;
+    font-size: 12px; font-weight: 500; color: var(--green);
+    font-family: var(--mono);
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+  /* ── big status card ── */
+  .status-hero {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 2.5rem;
+    margin-bottom: 1.5rem;
+    position: relative; overflow: hidden;
+    transition: border-color .4s;
+  }
+  .status-hero.open   { border-color: rgba(248,113,113,0.4); }
+  .status-hero.closed { border-color: rgba(52,211,153,0.4); }
+  .status-hero.open_too_long { border-color: rgba(251,191,36,0.5); }
+
+  .hero-glow {
+    position: absolute; top: -60px; right: -60px;
+    width: 220px; height: 220px; border-radius: 50%;
+    filter: blur(60px); pointer-events: none; transition: background .5s;
+  }
+  .status-hero.open   .hero-glow { background: rgba(248,113,113,0.15); }
+  .status-hero.closed .hero-glow { background: rgba(52,211,153,0.15); }
+  .status-hero.open_too_long .hero-glow { background: rgba(251,191,36,0.2); }
+
+  .hero-inner { display: flex; align-items: center; gap: 2rem; position: relative; }
+
+  /* fridge animation */
+  .fridge-wrap { flex-shrink: 0; }
+  .fridge-svg { width: 90px; height: 120px; }
+
+  .hero-text h2 { font-size: 13px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+  .status-label {
+    font-size: 42px; font-weight: 700; letter-spacing: -1px; line-height: 1;
+    transition: color .4s;
+  }
+  .status-label.open   { color: var(--red); }
+  .status-label.closed { color: var(--green); }
+  .status-label.open_too_long { color: var(--amber); }
+
+  .status-sub { font-size: 13px; color: var(--text3); margin-top: 8px; font-family: var(--mono); }
+
+  /* duration bar */
+  .duration-bar-wrap { margin-top: 1.5rem; }
+  .duration-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text3); margin-bottom: 6px; font-family: var(--mono); }
+  .duration-bar { height: 4px; background: rgba(255,255,255,0.06); border-radius: 2px; overflow: hidden; }
+  .duration-fill { height: 100%; border-radius: 2px; transition: width 1s ease, background .4s; }
+
+  /* ── stat cards ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+  @media(max-width:600px){ .stats-grid { grid-template-columns: 1fr 1fr; } }
+
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 1.25rem 1.5rem;
+    transition: border-color .3s, transform .2s;
+  }
+  .stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+  .stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; font-family: var(--mono); }
+  .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -0.5px; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red   { color: var(--red);   }
+  .stat-value.amber { color: var(--amber); }
+  .stat-value.blue  { color: var(--accent); }
+
+  /* ── history ── */
+  .section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .section-head h3 { font-size: 14px; font-weight: 600; letter-spacing: .3px; }
+  .refresh-btn {
+    background: transparent; border: 1px solid var(--border2);
+    color: var(--accent); border-radius: 8px; padding: 5px 12px;
+    font-size: 12px; font-family: var(--mono); cursor: pointer;
+    transition: background .2s;
+  }
+  .refresh-btn:hover { background: rgba(56,189,248,0.1); }
+
+  .history-list {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; overflow: hidden;
+  }
+  .history-item {
+    display: flex; align-items: center; gap: 1rem; padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn .4s ease both;
+    transition: background .2s;
+  }
+  .history-item:hover { background: rgba(255,255,255,0.02); }
+  .history-item:last-child { border-bottom: none; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+
+  .history-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .history-dot.OPEN { background: var(--red); color: var(--red); }
+  .history-dot.CLOSED { background: var(--green); color: var(--green); }
+  .history-dot.OPEN_TOO_LONG { background: var(--amber); color: var(--amber); }
+
+  .history-status { font-size: 13px; font-weight: 600; flex: 1; }
+  .history-status.OPEN { color: var(--red); }
+  .history-status.CLOSED { color: var(--green); }
+  .history-status.OPEN_TOO_LONG { color: var(--amber); }
+
+  .history-time { font-size: 11px; color: var(--text3); font-family: var(--mono); white-space: nowrap; }
+  .history-id { font-size: 10px; color: var(--text3); font-family: var(--mono); background: rgba(255,255,255,0.04); padding: 2px 7px; border-radius: 5px; }
+
+  /* ── mini chart ── */
+  .chart-section { margin-top: 1.5rem; }
+  .chart-wrap {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 1.25rem 1.5rem;
+  }
+  .chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 60px; }
+  .chart-bar {
+    flex: 1; border-radius: 4px 4px 0 0; min-height: 4px;
+    transition: height .5s ease, background .3s;
+    cursor: pointer;
+    position: relative;
+  }
+  .chart-bar:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+    background: var(--bg3); border: 1px solid var(--border2);
+    color: var(--text); font-size: 10px; padding: 3px 7px;
+    border-radius: 5px; white-space: nowrap; font-family: var(--mono);
+    pointer-events: none; z-index: 10;
+  }
+  .chart-bar.OPEN { background: rgba(248,113,113,0.7); }
+  .chart-bar.CLOSED { background: rgba(52,211,153,0.7); }
+  .chart-bar.OPEN_TOO_LONG { background: rgba(251,191,36,0.7); }
+
+  /* ── skeleton loading ── */
+  .skeleton { background: var(--bg3); border-radius: 6px; animation: shimmer 1.4s ease-in-out infinite; }
+  @keyframes shimmer { 0%,100%{opacity:.4} 50%{opacity:.8} }
+
+  /* ── error ── */
+  .error-msg { text-align: center; padding: 2rem; color: var(--red); font-size: 14px; }
+
+  /* alert banner */
+  .alert-banner {
+    display: none; align-items: center; gap: 10px;
+    background: rgba(251,191,36,0.1); border: 1px solid rgba(251,191,36,0.3);
+    border-radius: 10px; padding: .75rem 1.25rem; margin-bottom: 1rem;
+    font-size: 13px; color: var(--amber);
+    animation: alertPulse 2s ease-in-out infinite;
+  }
+  .alert-banner.show { display: flex; }
+  @keyframes alertPulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+
+  /* door swing anim */
+  .fridge-door { transform-origin: left center; animation: none; }
+  .fridge-door.open-anim { animation: swingOpen 1s ease-out forwards; }
+  .fridge-door.closed-anim { animation: swingClose .6s ease-out forwards; }
+  @keyframes swingOpen  { from{transform:rotateY(0deg)} to{transform:rotateY(-70deg)} }
+  @keyframes swingClose { from{transform:rotateY(-70deg)} to{transform:rotateY(0deg)} }
+
+  footer { text-align: center; margin-top: 3rem; font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+  .temp-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(56,189,248,0.08); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 10px;
+    font-size: 11px; font-family: var(--mono); color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-grid"></div>
+<div class="bg-glow"></div>
+
+<div class="app">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">🧊</div>
+      <div>
+        <h1>FridgeGuard</h1>
+        <p>ESP8266 · Supabase · Real-time</p>
+      </div>
+    </div>
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      LIVE
+    </div>
+  </header>
+
+  <!-- ALERT -->
+  <div class="alert-banner" id="alertBanner">
+    ⚠️ Door has been open too long! Check your fridge.
+  </div>
+
+  <!-- HERO STATUS CARD -->
+  <div class="status-hero" id="heroCard">
+    <div class="hero-glow" id="heroGlow"></div>
+    <div class="hero-inner">
+      <div class="fridge-wrap">
+        <svg class="fridge-svg" viewBox="0 0 80 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- fridge body -->
+          <rect x="8" y="4" width="64" height="102" rx="10" fill="#1a2235" stroke="rgba(56,189,248,0.3)" stroke-width="1.5"/>
+          <!-- freezer line -->
+          <line x1="8" y1="38" x2="72" y2="38" stroke="rgba(56,189,248,0.2)" stroke-width="1"/>
+          <!-- door panel -->
+          <rect id="fridgeDoor" class="fridge-door" x="8" y="4" width="60" height="34" rx="8 8 0 0" fill="#141d2e" stroke="rgba(56,189,248,0.4)" stroke-width="1.2"/>
+          <!-- handle top -->
+          <rect x="58" y="14" width="4" height="14" rx="2" fill="rgba(56,189,248,0.5)"/>
+          <!-- handle bottom -->
+          <rect x="58" y="52" width="4" height="18" rx="2" fill="rgba(56,189,248,0.3)"/>
+          <!-- vent slits -->
+          <line x1="20" y1="50" x2="52" y2="50" stroke="rgba(56,189,248,0.15)" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="20" y1="57" x2="52" y2="57" stroke="rgba(56,189,248,0.15)" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="20" y1="64" x2="52" y2="64" stroke="rgba(56,189,248,0.15)" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- cold indicator light -->
+          <circle id="fridgeLight" cx="22" cy="20" r="4" fill="rgba(52,211,153,0.8)"/>
+          <!-- snowflake icon -->
+          <text x="40" y="26" text-anchor="middle" font-size="14" fill="rgba(56,189,248,0.5)">❄</text>
+        </svg>
+      </div>
+
+      <div class="hero-text" style="flex:1;">
+        <h2>Current Status</h2>
+        <div class="status-label" id="statusLabel">—</div>
+        <div class="status-sub" id="statusSub">Loading...</div>
+        <div class="temp-chip" style="margin-top: 12px;">
+          <span>📡</span> <span id="lastId">ID: —</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="duration-bar-wrap">
+      <div class="duration-label">
+        <span>Time in state</span>
+        <span id="durationText">—</span>
+      </div>
+      <div class="duration-bar">
+        <div class="duration-fill" id="durationFill" style="width:0%;background:var(--green)"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+      <div class="stat-label">Total Events</div>
+      <div class="stat-value blue" id="statTotal">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Open Events</div>
+      <div class="stat-value red" id="statOpen">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Too Long Alerts</div>
+      <div class="stat-value amber" id="statAlert">—</div>
+    </div>
+  </div>
+
+  <!-- ACTIVITY CHART -->
+  <div class="chart-section">
+    <div class="section-head">
+      <h3>Recent Activity</h3>
+      <span class="temp-chip">last 20 events</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-bars" id="chartBars"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div style="margin-top:1.5rem;">
+    <div class="section-head">
+      <h3>Event Log</h3>
+      <button class="refresh-btn" onclick="fetchData()">↻ Refresh</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-item"><div class="skeleton" style="width:100%;height:16px;"></div></div>
+      <div class="history-item"><div class="skeleton" style="width:80%;height:16px;"></div></div>
+      <div class="history-item"><div class="skeleton" style="width:90%;height:16px;"></div></div>
+    </div>
+  </div>
+
+  <footer>FridgeGuard v1.0 · ESP8266 IoT Project · Supabase Realtime</footer>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://okxwuzwlygwbrtxqdden.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9reHd1endseWd3YnJ0eHFkZGVuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczNzIyNjksImV4cCI6MjA5Mjk0ODI2OX0.xFPTcb0xVLPquoqvKnZG6G1wqTDDq2zJrLcYq8KR-1M';
+
+let currentStatus = null;
+
+async function fetchData() {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/door_status?select=*&order=created_at.desc&limit=40`,
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+    );
+    if (!res.ok) throw new Error('Fetch failed');
+    const rows = await res.json();
+    if (rows && rows.length) {
+      updateHero(rows[0], rows);
+      updateStats(rows);
+      updateHistory(rows.slice(0, 15));
+      updateChart(rows.slice(0, 20).reverse());
+    }
+  } catch(e) {
+    document.getElementById('historyList').innerHTML =
+      `<div class="error-msg">⚡ Could not connect to Supabase.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function updateHero(latest, all) {
+  const status = latest.status;
+  const heroCard = document.getElementById('heroCard');
+  const label = document.getElementById('statusLabel');
+  const sub = document.getElementById('statusSub');
+  const lastId = document.getElementById('lastId');
+  const fridgeLight = document.getElementById('fridgeLight');
+
+  const statusClass = status.toLowerCase().replace('_too_long','_too_long');
+  const cssClass = status === 'OPEN_TOO_LONG' ? 'open_too_long' : status.toLowerCase();
+
+  heroCard.className = 'status-hero ' + cssClass;
+  label.className = 'status-label ' + cssClass;
+
+  const labels = { OPEN: 'OPEN', CLOSED: 'CLOSED', OPEN_TOO_LONG: 'OPEN TOO LONG' };
+  label.textContent = labels[status] || status;
+
+  const dt = new Date(latest.created_at);
+  sub.textContent = 'Since ' + dt.toLocaleString();
+  lastId.textContent = 'ID: #' + latest.id;
+
+  // alert banner
+  document.getElementById('alertBanner').className =
+    'alert-banner' + (status === 'OPEN_TOO_LONG' ? ' show' : '');
+
+  // fridge light color
+  if (status === 'CLOSED') fridgeLight.setAttribute('fill','rgba(52,211,153,0.9)');
+  else if (status === 'OPEN_TOO_LONG') fridgeLight.setAttribute('fill','rgba(251,191,36,0.9)');
+  else fridgeLight.setAttribute('fill','rgba(248,113,113,0.9)');
+
+  // duration bar
+  const prevClosed = all.find((r,i) => i > 0 && r.status === 'CLOSED');
+  let pct = 0;
+  let durStr = '—';
+  if (status !== 'CLOSED' && prevClosed) {
+    const secs = (new Date(latest.created_at) - new Date(prevClosed.created_at)) / 1000;
+    pct = Math.min(100, (secs / 120) * 100);
+    durStr = secs < 60 ? Math.round(secs) + 's' : (secs/60).toFixed(1) + 'm';
+  } else {
+    durStr = 'Closed';
+    pct = 0;
+  }
+  const fill = document.getElementById('durationFill');
+  fill.style.width = pct + '%';
+  fill.style.background = pct > 80 ? 'var(--amber)' : pct > 40 ? 'var(--red)' : 'var(--green)';
+  document.getElementById('durationText').textContent = durStr;
+
+  currentStatus = status;
+}
+
+function updateStats(rows) {
+  document.getElementById('statTotal').textContent = rows.length;
+  document.getElementById('statOpen').textContent = rows.filter(r => r.status === 'OPEN').length;
+  document.getElementById('statAlert').textContent = rows.filter(r => r.status === 'OPEN_TOO_LONG').length;
+}
+
+function updateHistory(rows) {
+  const list = document.getElementById('historyList');
+  list.innerHTML = rows.map((r, i) => {
+    const dt = new Date(r.created_at);
+    const time = dt.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    const date = dt.toLocaleDateString([], {month:'short', day:'numeric'});
+    const label = r.status === 'OPEN_TOO_LONG' ? 'OPEN TOO LONG' : r.status;
+    return `<div class="history-item" style="animation-delay:${i*40}ms">
+      <div class="history-dot ${r.status}"></div>
+      <span class="history-status ${r.status}">${label}</span>
+      <span class="history-id">#${r.id}</span>
+      <span class="history-time">${date} ${time}</span>
+    </div>`;
+  }).join('');
+}
+
+function updateChart(rows) {
+  const bars = document.getElementById('chartBars');
+  const maxH = 60;
+  bars.innerHTML = rows.map((r, i) => {
+    const h = r.status === 'CLOSED' ? 20 : r.status === 'OPEN_TOO_LONG' ? 55 : 38;
+    const dt = new Date(r.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+    const tip = `#${r.id} · ${r.status} · ${dt}`;
+    return `<div class="chart-bar ${r.status}" style="height:${h}px" data-tip="${tip}"></div>`;
+  }).join('');
+}
+
+// initial load
+fetchData();
+
+// auto-refresh every 10s
+setInterval(fetchData, 10000);
+
+// realtime subscription via SSE (Supabase realtime)
+try {
+  const channel = `realtime:public:door_status`;
+  const wsUrl = SUPABASE_URL.replace('https','wss') + '/realtime/v1/websocket?apikey=' + SUPABASE_KEY + '&vsn=1.0.0';
+  const ws = new WebSocket(wsUrl);
+  ws.onopen = () => {
+    ws.send(JSON.stringify({topic:"realtime:public:door_status",event:"phx_join",payload:{},ref:1}));
+    setInterval(() => ws.send(JSON.stringify({topic:"phoenix",event:"heartbeat",payload:{},ref:0})), 25000);
+  };
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.event === 'INSERT' || msg.event === 'UPDATE') fetchData();
+  };
+} catch(e) {}
+</script>
+</body>
+</html>
